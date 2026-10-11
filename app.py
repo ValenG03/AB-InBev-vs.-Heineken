@@ -19,53 +19,34 @@ BORDER = "#23262E"
 TEXT = "#F2F2F2"
 MUTED = "#8A8F98"
 
-# Tipo de cambio promedio anual EUR/USD (Banco Central Europeo)
-FX = {"2023": 1.0813, "2024": 1.0824, "2025": 1.1300}
+PERIODOS = ["2025", "1S 2026", "2025 + 1S 2026"]
+
+# Tipo de cambio promedio EUR/USD (referencia diaria del Banco Central Europeo)
+FX = {"2025": 1.1300, "1S 2026": 1.1666}
 
 # =========================================================
 # DATOS OFICIALES (comunicados de resultados de cada compañía)
-# AB InBev: millones USD | Heineken: millones EUR | Volumen: millones hl
+# AB InBev en millones de USD · Heineken en millones de EUR · Volumen en millones de hl
+# ingresos      -> ABI: Revenue | HEI: Net revenue (IFRS). Ambos netos de impuestos especiales
+# op            -> Ganancia operativa: ABI Normalized EBIT | HEI Operating profit (beia)
+# base_margen   -> Base del margen operativo: ABI Revenue | HEI Net revenue (beia)
+# neto          -> ABI Underlying Profit | HEI Net profit (beia)
+# mkt           -> ABI inversión en sales & marketing | HEI Marketing and selling expenses
+# vol           -> ABI Total volumes | HEI Total volume
 # =========================================================
-ANUAL = pd.DataFrame({
-    "Año": ["2023", "2024", "2025"],
-    # Ingresos (netos de impuestos especiales)
-    "ABI_ingresos": [59380, 59768, 59320],
-    "HEI_ingresos": [30362, 29821, 28753],
-    # EBITDA normalizado (ABI) / EBITDA beia (Heineken)
-    "ABI_ebitda": [19976, 20958, 21223],
-    "HEI_ebitda": [6541, 6685, 6560],
-    # Margen EBITDA (%)
-    "ABI_margen": [33.6, 35.1, 35.8],
-    "HEI_margen": [21.6, 22.3, 22.7],
-    # Beneficio neto ajustado: Underlying Profit (ABI) / Net profit beia (Heineken)
-    "ABI_neto": [6158, 7061, 7410],
-    "HEI_neto": [2632, 2739, 2662],
-    # Inversión en ventas y marketing
-    "ABI_mkt": [7200, 7200, 7400],
-    "HEI_mkt": [2767, 2940, 2855],
-    # Volumen total (millones de hectolitros)
-    "ABI_vol": [None, 575.7, 561.1],
-    "HEI_vol": [None, 286.2, 281.6],
-})
-
-SEMESTRE = {
+BASE = {
     "AB InBev": {
-        "moneda": "USD",
-        "Ingresos": (28632, 31927),
-        "EBITDA": (10156, 11375),
-        "Beneficio neto ajustado": (3556, 4314),
-        "Volumen (M hl)": (279.6, 280.4),
-        "Marketing": (None, 4100),
+        "2025":    {"ingresos": 59320, "op": 15854, "base_margen": 59320, "neto": 7410, "mkt": 7400, "vol": 561.1},
+        "1S 2026": {"ingresos": 31927, "op": 8677,  "base_margen": 31927, "neto": 4314, "mkt": 4100, "vol": 280.4},
     },
     "Heineken": {
-        "moneda": "EUR",
-        "Ingresos": (14180, 14841),
-        "EBITDA": (3088, 3295),
-        "Beneficio neto ajustado": (1164, 1256),
-        "Volumen (M hl)": (138.6, 142.8),
-        "Marketing": (1444, 1492),
+        "2025":    {"ingresos": 28753, "op": 4385, "base_margen": 28890, "neto": 2662, "mkt": 2855, "vol": 281.6},
+        "1S 2026": {"ingresos": 14841, "op": 2170, "base_margen": 14834, "neto": 1256, "mkt": 1492, "vol": 142.8},
     },
 }
+MONEDA = {"AB InBev": "USD", "Heineken": "EUR"}
+COLOR = {"AB InBev": ABI, "Heineken": HEI}
+MONETARIOS = ["ingresos", "op", "base_margen", "neto", "mkt"]
 
 AB_EMPRESAS = [
     ("Anheuser-Busch", "Estados Unidos", "Budweiser, Bud Light, Michelob Ultra, Busch"),
@@ -93,9 +74,7 @@ st.markdown(f"""
     }}
     .card-label {{ color: {MUTED}; font-size: .78rem; text-transform: uppercase; letter-spacing: 1px; }}
     .card-value {{ font-size: clamp(1.1rem, 1.6vw, 1.75rem); white-space: nowrap; font-weight: 800; margin-top: 6px; }}
-    .card-delta {{ font-size: .85rem; margin-top: 4px; }}
-    .pos {{ color: {HEI}; }}
-    .neg {{ color: #FF4D6D; }}
+    .card-delta {{ font-size: .85rem; margin-top: 4px; color: {MUTED}; }}
     .tag {{
         display: inline-block; padding: 3px 12px; border-radius: 20px;
         font-weight: 700; font-size: .85rem; margin-bottom: 10px; color: #000;
@@ -103,6 +82,11 @@ st.markdown(f"""
     .seccion {{ font-size: 1.35rem; font-weight: 700; margin: 30px 0 6px 0;
                border-left: 4px solid {ABI}; padding-left: 10px; }}
     .nota {{ color: {MUTED}; font-size: .8rem; }}
+    .explica {{
+        background: {CARD}; border: 1px solid {BORDER}; border-left: 4px solid {HEI};
+        border-radius: 12px; padding: 16px 20px; font-size: .92rem; line-height: 1.55;
+    }}
+    .explica b {{ color: {TEXT}; }}
     div[data-testid="stDataFrame"] {{ border: 1px solid {BORDER}; border-radius: 10px; }}
 </style>
 """, unsafe_allow_html=True)
@@ -111,26 +95,31 @@ st.markdown(f"""
 # =========================================================
 # FUNCIONES
 # =========================================================
+def datos(empresa, periodo, a_usd=False):
+    """Devuelve los datos de un período. La suma 2025 + 1S 2026 se calcula sumando ambos períodos."""
+    partes = ["2025", "1S 2026"] if periodo == "2025 + 1S 2026" else [periodo]
+    out = {k: 0.0 for k in BASE[empresa]["2025"]}
+    for per in partes:
+        fx = FX[per] if (a_usd and empresa == "Heineken") else 1
+        for k, v in BASE[empresa][per].items():
+            out[k] += v * fx if k in MONETARIOS else v
+    out["margen"] = out["op"] / out["base_margen"] * 100
+    out["pct_mkt"] = out["mkt"] / out["ingresos"] * 100
+    out["pct_neto"] = out["neto"] / out["ingresos"] * 100
+    return out
+
+
 def fmt_money(v, moneda):
     simbolo = "US$" if moneda == "USD" else "€"
     return f"{simbolo} {v/1000:,.1f} B" if v >= 1000 else f"{simbolo} {v:,.0f} M"
 
 
-def delta_html(actual, previo):
-    if actual is None or previo in (None, 0):
-        return "<div class='card-delta' style='color:#8A8F98'>—</div>"
-    d = (actual - previo) / previo * 100
-    clase = "pos" if d >= 0 else "neg"
-    flecha = "▲" if d >= 0 else "▼"
-    return f"<div class='card-delta {clase}'>{flecha} {d:+.1f}% vs anterior</div>"
-
-
-def card(label, valor, delta, color):
+def card(label, valor, detalle, color):
     st.markdown(f"""
     <div class='card' style='border-top:3px solid {color}'>
         <div class='card-label'>{label}</div>
         <div class='card-value' style='color:{color}'>{valor}</div>
-        {delta}
+        <div class='card-delta'>{detalle}</div>
     </div>""", unsafe_allow_html=True)
 
 
@@ -141,37 +130,22 @@ def layout_fig(fig, titulo, ysuffix=""):
         font=dict(color=TEXT, family="Inter, sans-serif"),
         legend=dict(orientation="h", y=1.12, x=0, bgcolor="rgba(0,0,0,0)", font=dict(color=TEXT)),
         margin=dict(l=20, r=20, t=70, b=20), height=380,
-        hovermode="x unified",
+        hovermode="x unified", barmode="group", bargap=0.3,
     )
     fig.update_xaxes(showgrid=False, linecolor=BORDER, type="category")
     fig.update_yaxes(gridcolor=BORDER, zeroline=False, ticksuffix=ysuffix)
     return fig
 
 
-def barras(col, titulo, sufijo, convertir=True, decimales=0):
-    df = ANUAL.copy()
-    hei = df[f"HEI_{col}"]
-    if convertir and moneda_vista == "USD":
-        hei = [v * FX[a] if v is not None else None for v, a in zip(hei, df["Año"])]
+def barras(clave, titulo, sufijo="", decimales=0, convertir=True):
     fig = go.Figure()
-    for nombre, valores, color in [("AB InBev", df[f"ABI_{col}"], ABI), ("Heineken", hei, HEI)]:
+    for emp in ["AB InBev", "Heineken"]:
+        a_usd = convertir and moneda_vista == "USD"
+        valores = [datos(emp, per, a_usd)[clave] for per in PERIODOS]
         fig.add_bar(
-            x=df["Año"], y=valores, name=nombre, marker_color=color,
-            text=[f"{v:,.{decimales}f}" if pd.notna(v) else "" for v in valores],
+            x=PERIODOS, y=valores, name=emp, marker_color=COLOR[emp],
+            text=[f"{v:,.{decimales}f}{sufijo}" for v in valores],
             textposition="outside", textfont=dict(color=TEXT, size=11),
-        )
-    fig.update_layout(barmode="group", bargap=0.3)
-    return layout_fig(fig, titulo, sufijo)
-
-
-def lineas(col, titulo, sufijo="%"):
-    fig = go.Figure()
-    for nombre, color in [("AB InBev", ABI), ("Heineken", HEI)]:
-        fig.add_scatter(
-            x=ANUAL["Año"], y=ANUAL[f"{'ABI' if nombre == 'AB InBev' else 'HEI'}_{col}"],
-            name=nombre, mode="lines+markers+text", line=dict(color=color, width=4),
-            marker=dict(size=11), text=[f"{v:.1f}%" for v in ANUAL[f"{'ABI' if nombre == 'AB InBev' else 'HEI'}_{col}"]],
-            textposition="top center", textfont=dict(color=color),
         )
     return layout_fig(fig, titulo, sufijo)
 
@@ -181,25 +155,27 @@ def lineas(col, titulo, sufijo="%"):
 # =========================================================
 with st.sidebar:
     st.markdown("### ⚙️ Controles")
+    periodo = st.radio("Período de las tarjetas", PERIODOS, index=2)
     moneda_vista = st.radio(
         "Moneda de Heineken en los gráficos",
         ["USD", "EUR"],
         help="AB InBev reporta en USD y Heineken en EUR. En 'USD' se convierte Heineken "
-             "con el tipo de cambio promedio anual del BCE.",
+             "con el tipo de cambio promedio del BCE de cada período.",
     )
-    anio = st.selectbox("Año para las tarjetas", ["2025", "2024", "2023"])
     st.markdown("---")
-    st.markdown("**Tipo de cambio EUR/USD (prom. anual BCE)**")
+    st.markdown("**Tipo de cambio EUR/USD (promedio BCE)**")
     for a, v in FX.items():
         st.markdown(f"<span class='nota'>{a}: {v}</span>", unsafe_allow_html=True)
+    st.markdown("<span class='nota'>2025 + 1S 2026 = 18 meses (enero 2025 a junio 2026).</span>",
+                unsafe_allow_html=True)
 
 # =========================================================
 # HEADER
 # =========================================================
 st.markdown("<div class='titulo'>🍺 AB InBev <span style='color:#FFD60A'>vs</span> Heineken</div>",
             unsafe_allow_html=True)
-st.markdown("<div class='sub'>Los dos mayores cerveceros del mundo · Análisis temporal 2023 – 2025 "
-            "y primer semestre 2026 · Datos oficiales de los reportes de resultados</div>",
+st.markdown("<div class='sub'>Los dos mayores cerveceros del mundo · Períodos analizados: 2025 · "
+            "1er semestre 2026 · Acumulado 2025 + 1S 2026 · Datos oficiales de los reportes de resultados</div>",
             unsafe_allow_html=True)
 st.write("")
 
@@ -216,101 +192,80 @@ with c2:
                 "Reporta en EUR</span>", unsafe_allow_html=True)
 
 # =========================================================
+# EXPLICACIÓN: EBITDA vs MARGEN OPERATIVO
+# =========================================================
+st.write("")
+st.markdown("""
+<div class='explica'>
+<b>¿Qué es el EBITDA y por qué acá mostramos el margen operativo?</b><br>
+El <b>EBITDA</b> es la ganancia que deja el negocio antes de restar intereses, impuestos,
+depreciaciones y amortizaciones. Mide cuánta plata genera la operación pura, sin contar cómo se
+financia la empresa ni el desgaste de sus fábricas y equipos.<br>
+El <b>margen operativo</b> va un paso más allá: también resta depreciaciones y amortizaciones, y se
+expresa como porcentaje de los ingresos. Responde a la pregunta <i>“de cada 100 que vende la
+empresa, ¿cuánto le queda como ganancia de su operación?”</i>. Por eso es más exigente y más
+comparable, y es el indicador que usamos en este dashboard.
+</div>
+""", unsafe_allow_html=True)
+
+# =========================================================
 # TARJETAS (5 PARÁMETROS)
 # =========================================================
-st.markdown(f"<div class='seccion'>Indicadores clave · {anio}</div>", unsafe_allow_html=True)
-i = ANUAL.index[ANUAL["Año"] == anio][0]
-p = i - 1 if i > 0 else None
+st.markdown(f"<div class='seccion'>Indicadores clave · {periodo}</div>", unsafe_allow_html=True)
+vol_total = sum(datos(e, periodo)["vol"] for e in BASE)
 
-
-def prev(col):
-    return ANUAL.loc[p, col] if p is not None else None
-
-
-for emp, pref, color, moneda in [("AB InBev", "ABI", ABI, "USD"), ("Heineken", "HEI", HEI, "EUR")]:
+for emp in ["AB InBev", "Heineken"]:
+    d = datos(emp, periodo)
+    color, moneda = COLOR[emp], MONEDA[emp]
     st.markdown(f"<span style='color:{color};font-weight:700'>{emp}</span>", unsafe_allow_html=True)
     cols = st.columns(5)
     with cols[0]:
-        card("Ingresos", fmt_money(ANUAL.loc[i, f"{pref}_ingresos"], moneda),
-             delta_html(ANUAL.loc[i, f"{pref}_ingresos"], prev(f"{pref}_ingresos")), color)
+        por_hl = d["ingresos"] * 1e6 / (d["vol"] * 1e6)
+        simb = "US$" if moneda == "USD" else "€"
+        card("Ingresos", fmt_money(d["ingresos"], moneda), f"{simb} {por_hl:,.0f} por hectolitro", color)
     with cols[1]:
-        card("EBITDA", fmt_money(ANUAL.loc[i, f"{pref}_ebitda"], moneda),
-             f"<div class='card-delta' style='color:#8A8F98'>Margen {ANUAL.loc[i, f'{pref}_margen']:.1f}%</div>",
-             color)
+        card("Margen operativo", f"{d['margen']:.1f}%",
+             f"Ganancia operativa {fmt_money(d['op'], moneda)}", color)
     with cols[2]:
-        card("Beneficio neto ajustado", fmt_money(ANUAL.loc[i, f"{pref}_neto"], moneda),
-             delta_html(ANUAL.loc[i, f"{pref}_neto"], prev(f"{pref}_neto")), color)
+        card("Beneficio neto ajustado", fmt_money(d["neto"], moneda),
+             f"{d['pct_neto']:.1f}% de los ingresos", color)
     with cols[3]:
-        v = ANUAL.loc[i, f"{pref}_vol"]
-        card("Volumen", f"{v:,.1f} M hl" if pd.notna(v) else "s/d",
-             delta_html(v if pd.notna(v) else None,
-                        prev(f"{pref}_vol") if p is not None and pd.notna(prev(f"{pref}_vol")) else None),
-             color)
+        card("Volumen", f"{d['vol']:,.1f} M hl",
+             f"{d['vol'] / vol_total * 100:.0f}% del volumen de ambas", color)
     with cols[4]:
-        mkt = ANUAL.loc[i, f"{pref}_mkt"]
-        pct = mkt / ANUAL.loc[i, f"{pref}_ingresos"] * 100
-        card("Ventas y marketing", fmt_money(mkt, moneda),
-             f"<div class='card-delta' style='color:#8A8F98'>{pct:.1f}% de los ingresos</div>", color)
+        card("Ventas y marketing", fmt_money(d["mkt"], moneda),
+             f"{d['pct_mkt']:.1f}% de los ingresos", color)
     st.write("")
 
 # =========================================================
 # GRÁFICOS
 # =========================================================
-st.markdown("<div class='seccion'>Evolución 2023 – 2025</div>", unsafe_allow_html=True)
-suf = "M US$" if moneda_vista == "USD" else "M (ABI en US$ · HEI en €)"
+st.markdown("<div class='seccion'>Comparación por período</div>", unsafe_allow_html=True)
+suf = "M US$" if moneda_vista == "USD" else "M · AB InBev en US$ · Heineken en €"
 
 g1, g2 = st.columns(2)
 with g1:
-    st.plotly_chart(barras("ingresos", f"1 · Ingresos ({suf})", ""), width="stretch")
+    st.plotly_chart(barras("ingresos", f"1 · Ingresos ({suf})"), width="stretch")
 with g2:
-    st.plotly_chart(lineas("margen", "2 · Margen EBITDA (%)"), width="stretch")
+    st.plotly_chart(barras("margen", "2 · Margen operativo (%)", "%", 1, convertir=False), width="stretch")
 
 g3, g4 = st.columns(2)
 with g3:
-    st.plotly_chart(barras("neto", f"3 · Beneficio neto ajustado ({suf})", ""), width="stretch")
+    st.plotly_chart(barras("neto", f"3 · Beneficio neto ajustado ({suf})"), width="stretch")
 with g4:
-    st.plotly_chart(barras("vol", "4 · Volumen total (millones de hl)", "", convertir=False, decimales=1),
+    st.plotly_chart(barras("vol", "4 · Volumen total (millones de hl)", "", 1, convertir=False),
                     width="stretch")
 
 g5, g6 = st.columns(2)
 with g5:
-    st.plotly_chart(barras("mkt", f"5 · Inversión en ventas y marketing ({suf})", ""), width="stretch")
+    st.plotly_chart(barras("mkt", f"5 · Inversión en ventas y marketing ({suf})"), width="stretch")
 with g6:
-    share = go.Figure()
-    for nombre, pref, color in [("AB InBev", "ABI", ABI), ("Heineken", "HEI", HEI)]:
-        pct = ANUAL[f"{pref}_mkt"] / ANUAL[f"{pref}_ingresos"] * 100
-        share.add_scatter(x=ANUAL["Año"], y=pct, name=nombre, mode="lines+markers+text",
-                          line=dict(color=color, width=4, dash="dot"), marker=dict(size=11),
-                          text=[f"{v:.1f}%" for v in pct], textposition="top center",
-                          textfont=dict(color=color))
-    st.plotly_chart(layout_fig(share, "Marketing como % de los ingresos", "%"), width="stretch")
+    st.plotly_chart(barras("pct_mkt", "Ventas y marketing como % de los ingresos", "%", 1, convertir=False),
+                    width="stretch")
 
-# =========================================================
-# ÚLTIMO SEMESTRE
-# =========================================================
-st.markdown("<div class='seccion'>Último dato: 1er semestre 2026 vs 1er semestre 2025</div>",
+st.markdown("<p class='nota'>El acumulado 2025 + 1S 2026 suma 18 meses de resultados. Los márgenes "
+            "y porcentajes del acumulado se recalculan sobre los totales sumados.</p>",
             unsafe_allow_html=True)
-s1, s2 = st.columns(2)
-for col, emp, color in [(s1, "AB InBev", ABI), (s2, "Heineken", HEI)]:
-    with col:
-        d = SEMESTRE[emp]
-        st.markdown(f"<span style='color:{color};font-weight:700'>{emp} · 1S 2026</span>",
-                    unsafe_allow_html=True)
-        cc = st.columns(3)
-        items = ["Ingresos", "EBITDA", "Beneficio neto ajustado"]
-        for k, item in enumerate(items):
-            prev_v, act = d[item]
-            with cc[k]:
-                card(item, fmt_money(act, d["moneda"]), delta_html(act, prev_v), color)
-        st.write("")
-        cc2 = st.columns(2)
-        with cc2[0]:
-            pv, av = d["Volumen (M hl)"]
-            card("Volumen", f"{av:,.1f} M hl", delta_html(av, pv), color)
-        with cc2[1]:
-            pv, av = d["Marketing"]
-            extra = delta_html(av, pv) if pv else "<div class='card-delta pos'>▲ +9% vs 1S 2025 (dato oficial)</div>"
-            card("Ventas y marketing", fmt_money(av, d["moneda"]), extra, color)
 
 # =========================================================
 # QUIÉN ES AB INBEV
@@ -334,14 +289,16 @@ st.markdown("<p class='nota'>AB InBev es la casa matriz que consolida estas comp
 # TABLA
 # =========================================================
 st.markdown("<div class='seccion'>Tabla de datos</div>", unsafe_allow_html=True)
-tabla = pd.DataFrame({
-    "Indicador": ["Ingresos (M)", "EBITDA (M)", "Margen EBITDA (%)", "Beneficio neto ajustado (M)",
-                  "Ventas y marketing (M)", "Volumen (M hl)"],
-})
-for _, r in ANUAL.iterrows():
-    a = r["Año"]
-    tabla[f"AB InBev {a} (US$)"] = [r.ABI_ingresos, r.ABI_ebitda, r.ABI_margen, r.ABI_neto, r.ABI_mkt, r.ABI_vol]
-    tabla[f"Heineken {a} (€)"] = [r.HEI_ingresos, r.HEI_ebitda, r.HEI_margen, r.HEI_neto, r.HEI_mkt, r.HEI_vol]
+filas = ["Ingresos (M)", "Ganancia operativa (M)", "Margen operativo (%)",
+         "Beneficio neto ajustado (M)", "Ventas y marketing (M)", "Volumen (M hl)"]
+tabla = pd.DataFrame({"Indicador": filas})
+for emp, simb in [("AB InBev", "US$"), ("Heineken", "€")]:
+    for per in PERIODOS:
+        d = datos(emp, per)
+        tabla[f"{emp} · {per} ({simb})"] = [
+            round(d["ingresos"]), round(d["op"]), round(d["margen"], 1),
+            round(d["neto"]), round(d["mkt"]), round(d["vol"], 1),
+        ]
 st.dataframe(tabla.set_index("Indicador"), width="stretch")
 
 # =========================================================
@@ -349,14 +306,15 @@ st.dataframe(tabla.set_index("Indicador"), width="stretch")
 # =========================================================
 with st.expander("📌 Notas metodológicas y fuentes"):
     st.markdown("""
+- **Períodos:** año 2025 completo, primer semestre 2026 (enero a junio) y el acumulado de ambos (18 meses).
 - **Ingresos:** AB InBev *Revenue* (ya neto de impuestos especiales) y Heineken *Net revenue* (IFRS, neto de impuestos especiales), para que sean comparables.
-- **EBITDA:** AB InBev *Normalized EBITDA*; Heineken *EBITDA (beia)*. El margen de Heineken se calcula sobre *Net revenue (beia)*.
-- **Beneficio neto ajustado:** AB InBev *Underlying Profit*; Heineken *Net profit (beia)*. Ambos excluyen partidas extraordinarias.
-- **Ventas y marketing:** AB InBev informa la inversión total en *sales and marketing* (US$ 7,2 B en 2023 y 2024, US$ 7,4 B en 2025, US$ 4,1 B en 1S 2026). Heineken: *Marketing and selling expenses* (IFRS).
-- **Volumen:** AB InBev *Total volumes* (cerveza + no cerveza, propios). Heineken *Total volume* (incluye volumen licenciado). Volumen 2023 no incluido por cambio de criterio de reporte de Heineken.
-- **Conversión:** Heineken en USD con tipo de cambio promedio anual EUR/USD del BCE. Los datos semestrales se muestran en moneda original.
-- **Fuentes:** AB InBev – comunicados de resultados FY2023, FY2024, FY2025 y 2Q/HY2026 (ab-inbev.com / SEC Form 6-K). Heineken N.V. – comunicados FY2024, FY2025 y HY2026 (theheinekencompany.com). Tipo de cambio: Banco Central Europeo.
+- **Margen operativo:** AB InBev *Normalized EBIT* sobre *Revenue*. Heineken *Operating profit (beia)* sobre *Net revenue (beia)*. Ambos excluyen partidas extraordinarias.
+- **Beneficio neto ajustado:** AB InBev *Underlying Profit*; Heineken *Net profit (beia)*.
+- **Ventas y marketing:** AB InBev informa su inversión total en *sales and marketing* (US$ 7,4 B en 2025 y US$ 4,1 B en 1S 2026). Heineken: *Marketing and selling expenses* (IFRS).
+- **Volumen:** AB InBev *Total volumes* (cerveza + no cerveza, propios). Heineken *Total volume* (incluye volumen licenciado).
+- **Conversión:** Heineken en USD con el tipo de cambio promedio EUR/USD del BCE de cada período (2025: 1,1300 · 1S 2026: 1,1666, promedio de las cotizaciones diarias de enero a junio).
+- **Fuentes:** AB InBev – comunicados de resultados FY2025 y 2Q/HY2026 (ab-inbev.com / SEC Form 6-K). Heineken N.V. – comunicados FY2025 y HY2026 (theheinekencompany.com). Tipo de cambio: Banco Central Europeo.
 """)
 
-st.markdown(f"<p class='nota' style='text-align:center;margin-top:30px'>Dashboard comparativo · "
-            f"AB InBev vs Heineken · Datos al 1er semestre 2026</p>", unsafe_allow_html=True)
+st.markdown("<p class='nota' style='text-align:center;margin-top:30px'>Dashboard comparativo · "
+            "AB InBev vs Heineken · 2025, 1S 2026 y acumulado</p>", unsafe_allow_html=True)
