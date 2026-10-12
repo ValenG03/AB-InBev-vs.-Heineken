@@ -192,23 +192,6 @@ with c2:
                 "Reporta en EUR</span>", unsafe_allow_html=True)
 
 # =========================================================
-# EXPLICACIÓN: EBITDA vs MARGEN OPERATIVO
-# =========================================================
-st.write("")
-st.markdown("""
-<div class='explica'>
-<b>¿Qué es el EBITDA y por qué acá mostramos el margen operativo?</b><br>
-El <b>EBITDA</b> es la ganancia que deja el negocio antes de restar intereses, impuestos,
-depreciaciones y amortizaciones. Mide cuánta plata genera la operación pura, sin contar cómo se
-financia la empresa ni el desgaste de sus fábricas y equipos.<br>
-El <b>margen operativo</b> va un paso más allá: también resta depreciaciones y amortizaciones, y se
-expresa como porcentaje de los ingresos. Responde a la pregunta <i>“de cada 100 que vende la
-empresa, ¿cuánto le queda como ganancia de su operación?”</i>. Por eso es más exigente y más
-comparable, y es el indicador que usamos en este dashboard.
-</div>
-""", unsafe_allow_html=True)
-
-# =========================================================
 # TARJETAS (5 PARÁMETROS)
 # =========================================================
 st.markdown(f"<div class='seccion'>Indicadores clave · {periodo}</div>", unsafe_allow_html=True)
