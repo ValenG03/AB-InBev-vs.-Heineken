@@ -71,8 +71,8 @@ st.markdown(f"""
     [data-testid="stHeader"] {{ background: transparent; }}
     h1, h2, h3, h4, p, span, label, li {{ color: {TEXT}; }}
     .block-container {{ padding-top: 2rem; max-width: 1400px; }}
-    .titulo {{ font-size: 2.6rem; font-weight: 800; letter-spacing: -1px; margin-bottom: 0; }}
-    .sub {{ color: {MUTED}; font-size: 1rem; margin-top: 4px; }}
+    .titulo {{ font-size: 2.6rem; font-weight: 800; letter-spacing: -1px; margin: 8px 0 0 0; text-align: center; }}
+    .sub {{ color: {MUTED}; font-size: 1rem; margin: 6px auto 0 auto; text-align: center; max-width: 900px; }}
     .card {{
         background: {CARD}; border: 1px solid {BORDER}; border-radius: 14px;
         padding: 18px 20px; height: 100%;
@@ -88,18 +88,24 @@ st.markdown(f"""
                border-left: 4px solid {ABI}; padding-left: 10px; }}
     .nota {{ color: {MUTED}; font-size: .8rem; }}
     .logos {{
-        display: flex; align-items: center; justify-content: center; gap: 28px;
-        flex-wrap: wrap; margin: 4px 0 26px 0;
+        display: flex; align-items: flex-start; justify-content: center; gap: 28px;
+        flex-wrap: wrap; margin: 4px 0 22px 0;
     }}
+    .logo-col {{
+        width: 340px; display: flex; flex-direction: column; align-items: center;
+        text-align: center; gap: 10px;
+    }}
+    .logo-col .tag {{ margin: 6px 0 0 0; }}
     .logo-box {{
         background: {CARD}; border: 1px solid {BORDER}; border-radius: 16px;
-        height: 132px; width: 340px; padding: 0 24px;
+        height: 132px; width: 100%; box-sizing: border-box; padding: 0 24px;
         display: flex; align-items: center; justify-content: center;
     }}
-    .logo-vs {{ font-size: 1.6rem; font-weight: 800; color: {MUTED}; letter-spacing: 2px; }}
+    .logo-vs {{ font-size: 1.6rem; font-weight: 800; color: {MUTED}; letter-spacing: 2px; margin-top: 48px; }}
     @media (max-width: 700px) {{
-        .logo-box {{ width: 100%; }}
-        .logo-vs {{ width: 100%; text-align: center; }}
+        .logo-col {{ width: 100%; }}
+        .logo-vs {{ width: 100%; text-align: center; margin-top: 0; }}
+        .titulo {{ font-size: 2rem; }}
     }}
     div[data-testid="stDataFrame"] {{ border: 1px solid {BORDER}; border-radius: 10px; }}
 </style>
@@ -221,9 +227,17 @@ def logo_html(archivo, alt, alto):
 
 st.markdown(f"""
 <div class='logos'>
-    <div class='logo-box' style='border-top:3px solid {ABI}'>{logo_html(LOGO_ABI, "AB InBev", 60)}</div>
+    <div class='logo-col'>
+        <div class='logo-box' style='border-top:3px solid {ABI}'>{logo_html(LOGO_ABI, "AB InBev", 60)}</div>
+        <span class='tag' style='background:{ABI}'>AB InBev · #1 mundial</span>
+        <div class='nota'>Lovaina, Bélgica · +400 marcas · ~137.000 empleados · Reporta en USD</div>
+    </div>
     <div class='logo-vs'>VS</div>
-    <div class='logo-box' style='border-top:3px solid {HEI}'>{logo_html(LOGO_HEI, "Heineken", 112)}</div>
+    <div class='logo-col'>
+        <div class='logo-box' style='border-top:3px solid {HEI}'>{logo_html(LOGO_HEI, "Heineken", 112)}</div>
+        <span class='tag' style='background:{HEI}'>Heineken · #2 mundial</span>
+        <div class='nota'>Ámsterdam, Países Bajos · +340 marcas · +85.000 empleados · Reporta en EUR</div>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -235,19 +249,6 @@ st.markdown("<div class='titulo'>🍺 AB InBev <span style='color:#FFD60A'>vs</s
 st.markdown("<div class='sub'>Los dos mayores cerveceros del mundo · Períodos analizados: 2025 · "
             "1er semestre 2026 · Acumulado 2025 + 1S 2026 · Datos oficiales de los reportes de resultados</div>",
             unsafe_allow_html=True)
-st.write("")
-
-c1, c2 = st.columns(2)
-with c1:
-    st.markdown(f"<span class='tag' style='background:{ABI}'>AB InBev · #1 mundial</span>",
-                unsafe_allow_html=True)
-    st.markdown("<span class='nota'>Lovaina, Bélgica · +400 marcas · ~137.000 empleados · "
-                "Reporta en USD</span>", unsafe_allow_html=True)
-with c2:
-    st.markdown(f"<span class='tag' style='background:{HEI}'>Heineken · #2 mundial</span>",
-                unsafe_allow_html=True)
-    st.markdown("<span class='nota'>Ámsterdam, Países Bajos · +340 marcas · +85.000 empleados · "
-                "Reporta en EUR</span>", unsafe_allow_html=True)
 
 # =========================================================
 # TARJETAS (5 PARÁMETROS)
