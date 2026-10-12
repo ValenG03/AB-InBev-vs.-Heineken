@@ -1,6 +1,11 @@
+import base64
+from io import BytesIO
+from pathlib import Path
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+from PIL import Image, ImageChops
 
 # =========================================================
 # CONFIGURACIÓN
@@ -82,11 +87,20 @@ st.markdown(f"""
     .seccion {{ font-size: 1.35rem; font-weight: 700; margin: 30px 0 6px 0;
                border-left: 4px solid {ABI}; padding-left: 10px; }}
     .nota {{ color: {MUTED}; font-size: .8rem; }}
-    .explica {{
-        background: {CARD}; border: 1px solid {BORDER}; border-left: 4px solid {HEI};
-        border-radius: 12px; padding: 16px 20px; font-size: .92rem; line-height: 1.55;
+    .logos {{
+        display: flex; align-items: center; justify-content: center; gap: 28px;
+        flex-wrap: wrap; margin: 4px 0 26px 0;
     }}
-    .explica b {{ color: {TEXT}; }}
+    .logo-box {{
+        background: {CARD}; border: 1px solid {BORDER}; border-radius: 16px;
+        height: 132px; width: 340px; padding: 0 24px;
+        display: flex; align-items: center; justify-content: center;
+    }}
+    .logo-vs {{ font-size: 1.6rem; font-weight: 800; color: {MUTED}; letter-spacing: 2px; }}
+    @media (max-width: 700px) {{
+        .logo-box {{ width: 100%; }}
+        .logo-vs {{ width: 100%; text-align: center; }}
+    }}
     div[data-testid="stDataFrame"] {{ border: 1px solid {BORDER}; border-radius: 10px; }}
 </style>
 """, unsafe_allow_html=True)
@@ -168,6 +182,50 @@ with st.sidebar:
         st.markdown(f"<span class='nota'>{a}: {v}</span>", unsafe_allow_html=True)
     st.markdown("<span class='nota'>2025 + 1S 2026 = 18 meses (enero 2025 a junio 2026).</span>",
                 unsafe_allow_html=True)
+
+# =========================================================
+# LOGOS (archivos en la raíz del repo, junto a app.py)
+# =========================================================
+LOGO_ABI = "ABinveb.png"
+LOGO_HEI = "heineken_beer-logo-brandlogos.net_.png"
+
+
+@st.cache_data
+def logo_b64(archivo):
+    """Recorta el logo a su contenido, quita el fondo y lo devuelve en base64."""
+    ruta = Path(__file__).parent / archivo
+    if not ruta.exists():
+        return None
+    img = Image.open(ruta).convert("RGBA")
+    if img.getchannel("A").getextrema()[0] == 255:   # sin transparencia: quitar el fondo liso
+        rgb = img.convert("RGB")
+        fondo = Image.new("RGB", rgb.size, rgb.getpixel((2, 2)))
+        dif = ImageChops.difference(rgb, fondo).convert("L")
+        img.putalpha(dif.point(lambda p: min(255, int(p * 1.6))))
+    caja = img.getbbox()
+    if caja:
+        img = img.crop(caja)
+    img.thumbnail((600, 400))
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def logo_html(archivo, alt, alto):
+    b64 = logo_b64(archivo)
+    if b64 is None:
+        return f"<span style='font-weight:800;font-size:1.4rem'>{alt}</span>"
+    return (f"<img src='data:image/png;base64,{b64}' alt='{alt}' "
+            f"style='max-height:{alto}px;max-width:100%;width:auto;display:block'>")
+
+
+st.markdown(f"""
+<div class='logos'>
+    <div class='logo-box' style='border-top:3px solid {ABI}'>{logo_html(LOGO_ABI, "AB InBev", 60)}</div>
+    <div class='logo-vs'>VS</div>
+    <div class='logo-box' style='border-top:3px solid {HEI}'>{logo_html(LOGO_HEI, "Heineken", 112)}</div>
+</div>
+""", unsafe_allow_html=True)
 
 # =========================================================
 # HEADER
